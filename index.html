@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Display a popup on click</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
+    <script
+        src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+    <link rel="stylesheet"
+        href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css"
+        type="text/css">
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font: 12px/20px Arial, Helvetica, sans-serif;
+        }
+
+        .mapboxgl-popup {
+            max-width: 400px;
+            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+        }
+
+        #map-container {
+            display: flex;
+            flex-direction: row;
+        }
+
+        #map {
+            flex: 1;
+            height: 100vh;
+
+        }
+
+        #sidebar {
+            width: 30%;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-item {
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #3680b7;
+            cursor: pointer;
+        }
+
+        .sidebar-item:hover {
+            background-color: #b8d8eb;
+        }
+    </style>
+</head>
+
+<body>
+
+
+    <div id="map-container">
+        <div id="map"></div>
+        <div id="sidebar"></div>
+    </div>
+    <script>
+
+        const sidebar = document.getElementById('sidebar');
+
+        mapboxgl.accessToken = 'pk.eyJ1IjoiYXJsYXlzaGEiLCJhIjoiY2xydGhncjE0MDZxYjJycnowa2R4Z2FpaCJ9.d0bSGtOD6btxhUsTgdHEgw';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+            style: 'mapbox://styles/mapbox/light-v11',
+            center: { lng: -94.65131899954866, lat: 39.034886167117634 },
+            zoom: 5
+        });
+
+        // Add the control to the map.
+        map.addControl(
+            new MapboxGeocoder({
+                accessToken: mapboxgl.accessToken,
+                mapboxgl: mapboxgl
+            })
+        );
+
+        map.on('load', () => {
+
+            d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkiqycniGnf7RSpyxvyWw8BS4DU0KCseWWd_ssCIU_F1J85dw7T5nk6htCVMDsZYY3N2I_Lg1-W_9/pub?output=csv")
+                .then(data => {
+                    console.log('data', data);
+                    const places = data.map(d => {
+
+                        return {
+                            type: 'Feature',
+                            properties: {
+                                name: d.name,
+                                address: d.address,
+                                description: `<strong>${d.name}</strong><p>${d.address}</p>`,
+                                icon: 'marker'
+                            },
+                            geometry: {
+                                type: 'Point',
+                                coordinates: [+d.lng, +d.lat]
+                            }
+                        }
+                    })
+
+                    const bounds = new mapboxgl.LngLatBounds();
+                    places.forEach(function (feature) {
+                        bounds.extend(feature.geometry.coordinates);
+
+                        const item = createItem(feature);
+                        sidebar.appendChild(item);
+                    });
+                    map.fitBounds(bounds, {
+                        padding: 100
+                    });
+
+                    map.getSource('places').setData({
+                        type: 'FeatureCollection',
+                        features: places
+                    })
+                })
+
+            map.addSource('places', {
+                'type': 'geojson',
+                'data': {
+                    'type': 'FeatureCollection',
+                    'features': []
+                }
+            });
+            // Add a layer showing the places.
+            map.addLayer({
+                'id': 'places',
+                'source': 'places',
+                'type': 'circle',
+                'paint': {
+                    'circle-radius': 8,
+                    'circle-color': '#9fc7e7',
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#1e3654'
+                },
+
+            });
+
+            map.on('click', 'places', (e) => {
+                const coordinates = e.features[0].geometry.coordinates.slice();
+                const description = e.features[0].properties.description;
+                console.log('123', 123);
+                new mapboxgl.Popup()
+                    .setLngLat(coordinates)
+                    .setHTML(description)
+                    .addTo(map);
+            });
+
+            map.on('mouseenter', 'places', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'places', () => {
+                map.getCanvas().style.cursor = '';
+            });
+        });
+
+
+        function createItem(item) {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'sidebar-item';
+            itemDiv.innerHTML = `
+                <h3>${item.properties.name}</h3>
+                <p>${item.properties.address}</p>
+            `;
+            itemDiv.addEventListener('click', () => {
+
+                //close previous popup
+
+
+                map.flyTo({
+                    center: item.geometry.coordinates,
+                    zoom: 15,
+                    speed: 2,
+                    essential: true // this animation is considered essential with respect to prefers-reduced-motion
+
+                });
+
+                map.once('moveend', () => {
+                    const popup = document.querySelector('.mapboxgl-popup');
+                    if (popup) popup.remove();
+
+                    new mapboxgl.Popup()
+                        .setLngLat(item.geometry.coordinates)
+                        .setHTML(item.properties.description)
+                        .addTo(map);
+                });
+
+            });
+
+            return itemDiv;
+        }
+    </script>
+
+</body>
+
+</html>
