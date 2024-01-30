@@ -14,27 +14,35 @@
         type="text/css">
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
+
+
+    <link href='https://fonts.googleapis.com/css?family=Montserrat' rel='stylesheet'>
+
     <style>
         body {
             margin: 0;
             padding: 0;
-            font: 12px/20px Arial, Helvetica, sans-serif;
+            font-family: 'Montserrat';
+            font-size: 12/20px;
+            background-color: white;
+            color: #1f3654;
         }
 
         .mapboxgl-popup {
             max-width: 400px;
-            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            font: 12px/20px 'Montserrat', Arial, Helvetica, sans-serif;
         }
 
         #map-container {
             display: flex;
             flex-direction: row;
+            height: 100vh;
+            width: 100vw;
         }
 
         #map {
             flex: 1;
             height: 100vh;
-
         }
 
         #sidebar {
@@ -45,13 +53,30 @@
 
         .sidebar-item {
             margin: 10px;
-            padding: 10px;
+            padding: 5px 10px;
             border: 1px solid #3680b7;
             cursor: pointer;
         }
 
         .sidebar-item:hover {
             background-color: #b8d8eb;
+        }
+
+        .mapboxgl-popup-close-button:focus-visible {
+            outline-color: #3680b7;
+        }
+
+
+
+        @media screen and (max-width: 768px) {
+            #map-container {
+                flex-direction: column;
+            }
+
+            #sidebar {
+                width: 100%;
+                height: 30vh;
+            }
         }
     </style>
 </head>
@@ -64,7 +89,7 @@
         <div id="sidebar"></div>
     </div>
     <script>
-
+        const mainData = [];
         const sidebar = document.getElementById('sidebar');
 
         mapboxgl.accessToken = 'pk.eyJ1IjoiYXJsYXlzaGEiLCJhIjoiY2xydGhncjE0MDZxYjJycnowa2R4Z2FpaCJ9.d0bSGtOD6btxhUsTgdHEgw';
@@ -76,13 +101,6 @@
             zoom: 5
         });
 
-        // Add the control to the map.
-        map.addControl(
-            new MapboxGeocoder({
-                accessToken: mapboxgl.accessToken,
-                mapboxgl: mapboxgl
-            })
-        );
 
         map.on('load', () => {
 
@@ -121,6 +139,40 @@
                         type: 'FeatureCollection',
                         features: places
                     })
+
+
+                    // Add the control to the map.
+                    function forwardGeocoder(query) {
+                        const matchingFeatures = [];
+                        for (const feature of places) {
+                            if (
+                                feature.properties.description
+                                    .toLowerCase()
+                                    .includes(query.toLowerCase())
+                            ) {
+                                // https://github.com/mapbox/carmen/blob/master/carmen-geojson.md
+                                feature['place_name'] = `📍 ${feature.properties.name} , ${feature.properties.address}`;
+                                feature['center'] = feature.geometry.coordinates;
+                                matchingFeatures.push(feature);
+                            }
+                        }
+                        return matchingFeatures;
+                    }
+
+                    // Add the control to the map.
+                    map.addControl(
+                        new MapboxGeocoder({
+                            accessToken: mapboxgl.accessToken,
+                            localGeocoder: forwardGeocoder,
+                            localGeocoderOnly: true,
+                            zoom: 14,
+                            placeholder: 'Enter search ',
+                            mapboxgl: mapboxgl,
+                            clearAndBlurOnEsc: true,
+                            marker: false,
+                        })
+                    );
+
                 })
 
             map.addSource('places', {
