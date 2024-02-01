@@ -107,11 +107,12 @@
             d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkiqycniGnf7RSpyxvyWw8BS4DU0KCseWWd_ssCIU_F1J85dw7T5nk6htCVMDsZYY3N2I_Lg1-W_9/pub?output=csv")
                 .then(data => {
                     console.log('data', data);
-                    const places = data.map(d => {
+                    const places = data.map((d, index) => {
 
                         return {
                             type: 'Feature',
                             properties: {
+                                id: `item-${index}`,
                                 name: d.name,
                                 address: d.address,
                                 description: `<strong>${d.name}</strong><p>${d.address}</p>`,
@@ -127,7 +128,6 @@
                     const bounds = new mapboxgl.LngLatBounds();
                     places.forEach(function (feature) {
                         bounds.extend(feature.geometry.coordinates);
-
                         const item = createItem(feature);
                         sidebar.appendChild(item);
                     });
@@ -150,7 +150,6 @@
                                     .toLowerCase()
                                     .includes(query.toLowerCase())
                             ) {
-                                // https://github.com/mapbox/carmen/blob/master/carmen-geojson.md
                                 feature['place_name'] = `📍 ${feature.properties.name} , ${feature.properties.address}`;
                                 feature['center'] = feature.geometry.coordinates;
                                 matchingFeatures.push(feature);
@@ -160,18 +159,38 @@
                     }
 
                     // Add the control to the map.
-                    map.addControl(
-                        new MapboxGeocoder({
-                            accessToken: mapboxgl.accessToken,
-                            localGeocoder: forwardGeocoder,
-                            localGeocoderOnly: true,
-                            zoom: 14,
-                            placeholder: 'Enter search ',
-                            mapboxgl: mapboxgl,
-                            clearAndBlurOnEsc: true,
-                            marker: false,
-                        })
-                    );
+                    const geocoder = new MapboxGeocoder({
+                        accessToken: mapboxgl.accessToken,
+                        localGeocoder: forwardGeocoder,
+                        localGeocoderOnly: true,
+                        zoom: 14,
+                        placeholder: 'Enter search ',
+                        mapboxgl: mapboxgl,
+                        clearAndBlurOnEsc: true,
+                        marker: false,
+                    })
+
+                    geocoder.on('result', (e) => {
+                        console.log('res');
+                        const coordinates = e.result.center;
+                        const description = e.result.place_name;
+
+                        const element = document
+                            .getElementById(e.result.properties.id)
+                        const y = element.getBoundingClientRect().top + window.scrollY;
+                        sidebar.scroll({
+                            top: y,
+                            behavior: 'smooth'
+                        });
+
+                        new mapboxgl.Popup()
+                            .setLngLat(coordinates)
+                            .setHTML(description)
+                            .addTo(map);
+                    });
+
+                    map.addControl(geocoder)
+
 
                 })
 
@@ -215,9 +234,9 @@
             });
         });
 
-
         function createItem(item) {
             const itemDiv = document.createElement('div');
+            itemDiv.id = item.properties.id;
             itemDiv.className = 'sidebar-item';
             itemDiv.innerHTML = `
                 <h3>${item.properties.name}</h3>
@@ -226,14 +245,11 @@
             itemDiv.addEventListener('click', () => {
 
                 //close previous popup
-
-
                 map.flyTo({
                     center: item.geometry.coordinates,
                     zoom: 15,
                     speed: 2,
                     essential: true // this animation is considered essential with respect to prefers-reduced-motion
-
                 });
 
                 map.once('moveend', () => {
